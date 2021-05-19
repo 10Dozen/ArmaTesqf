@@ -14,14 +14,25 @@ private _result = false;
 
 switch toUpper _method do {
 	case "RUN": {
+		// --- First time init (if running suite by function call, not by Diary topic)
+		["__INIT"] call SELF;
+
+		// --- Exit if Runner is busy
+		if ((RUNNER__SELF get "state") isNotEqualTo STATE_RUNNER_READY) exitWith {
+			private _suite = RUNNER__SUITE;
+			hint format [
+				"Test Suite [%1] is in progress now.\nProgress: %2 of %3\nPlease, wait for it be finished",
+				_suite get "name",
+				_suite get "progress",
+				_suite get "count"
+			];
+		};
+
 		private _suite = _arg1;
 
 		if (_suite isEqualType "") then {
 			_suite = ["CREATE",_suite] call TFUNC(TestSuite);
 		};
-
-		// --- First time init (if running suite by function call, not by Diary topic)
-		["__INIT"] call SELF;
 
 		// --- Prepare for execution
 		["__PREPARE", _suite] call SELF;
@@ -30,10 +41,15 @@ switch toUpper _method do {
 		["__START", _suite] spawn SELF;
 	};
 	case "ADD": {
-		private _suiteFile = _arg1;
+		private _suiteFiles = _arg1;
+		if (_arg1 isEqualType "") then {
+			_suiteFiles = [_arg1];
+		};
 
 		["__INIT"] call SELF;
-		["ADD_SUITE_TO_RUNNER_CONTROLS",_suiteFile] call TFUNC(Reporter);
+		_suiteFiles apply {
+			["ADD_SUITE_TO_RUNNER_CONTROLS",_x] call TFUNC(Reporter);
+		};
 	};
 	case "__INIT": {
 		// First time init
@@ -42,18 +58,14 @@ switch toUpper _method do {
 		RUNNER__SELF = createHashMap;
 		RUNNER__SELF set ["suites", []];
 		RUNNER__SELF set ["running_suite_id", -1];
+		RUNNER__SELF set ["state", STATE_RUNNER_READY];
 
 		["CREATE_RUNNER_CONTROLS"] call TFUNC(Reporter);
 
 		TGVAR(TestSuiteStartedEH) = [EVENT_SUITE_STARTED, {
 			params["_suite"];
 
-			["REPORT_SUITE_STARTED",
-				_suite get "name",
-				count (_suite get "tests"),
-				_suite get "tags",
-				_suite get "option.output"
-			] call TFUNC(Reporter);
+			["REPORT_SUITE_STARTED",_suite] call TFUNC(Reporter);
 		}] call CBA_fnc_addEventHandler;
 
 		TGVAR(TestSuiteFinishedEH) = [EVENT_SUITE_FINISHED, {
@@ -89,7 +101,18 @@ switch toUpper _method do {
 			};
 			_suite set ["suite_result",_suiteResult];
 
+			// --- Report results
 			["REPORT_SUITE_RESULTS",_suite] call TFUNC(Reporter);
+
+			// --- Clean tests
+			_suite set ["tests", []];
+
+			// --- Reset runner
+			RUNNER__SELF set ["state",STATE_RUNNER_READY];
+			RUNNER__SELF set ["running_suite_id",-1];
+			RUNNER__SELF set ["reporter.output",[]];
+
+			[EVENT_RUNNER_STOPPED, []] call CBA_fnc_localEvent;
 		}] call CBA_fnc_addEventHandler;
 
 		TGVAR(TestStartedEH) = [EVENT_TEST_STARTED, {
@@ -99,7 +122,6 @@ switch toUpper _method do {
 			_suite set ["current_test.name", _testName];
 			_suite set ["current_test.file", _testFile];
 		}] call CBA_fnc_addEventHandler;
-
 
 		TGVAR(TestSkipped) = [EVENT_TEST_SKIPPED, {
 			params ["_testName","_testFile"];
@@ -156,11 +178,14 @@ switch toUpper _method do {
 	case "__PREPARE": {
 		private _suite = _arg1;
 		private _suiteID = (RUNNER__SELF get "suites") pushBack _suite;
+		private _testsCount = count (_suite get "tests");
 
 		_suite set ["id", _suiteID];
+		_suite set ["count", _testsCount];
+		_suite set ["progress", 0];
 
 		private _executionResults = [];
-		for "_i" from 0 to (count (_suite get "tests") - 1) do {
+		for "_i" from 0 to (_testsCount - 1) do {
 			_executionResults pushBack STATE_NOT_RUN;
 		};
 		_suite set ["results", _executionResults];
@@ -168,14 +193,20 @@ switch toUpper _method do {
 	case "__START": {
 		private _suite = _arg1;
 
+		RUNNER__SELF set ["state",STATE_RUNNER_BUSY];
 		RUNNER__SELF set ["running_suite_id",_suite get "id"];
-		["CREATE_SUITE_TOPIC",
-			_suite get "name",
-			_suite get "id"
-		] call TFUNC(Reporter);
+		RUNNER__SELF set ["reporter.output", _suite get "options.output"];
+
+		if (TESQF_OUTPUT_DIARY in (RUNNER__SELF get "reporter.output")) then {
+			["CREATE_SUITE_TOPIC",
+				_suite get "name",
+				_suite get "id"
+			] call TFUNC(Reporter);
+		};
 
 		private _tags = _suite get "tags";
 		private _tests = _suite get "tests";
+		private _instantFail = _suite get "options.instant_fail";
 
 		[EVENT_SUITE_STARTED, [_suite]] call CBA_fnc_localEvent;
 
@@ -196,6 +227,15 @@ switch toUpper _method do {
 					_suite get "current_test.file"
 				]] call CBA_fnc_localEvent;
 			};
+
+			// Update Suite's progress
+			_suite set ["progress", (_suite get "progress") + 1];
+
+			// Exit if Instant Fail option is enabled and test case fails/crashes
+			if (
+				_instantFail
+				&& { _suite get "current_test.result" in [STATE_CRASH, STATE_FAIL] }
+			) exitWith {};
 
 			// Wait between tests
 			uiSleep 0.1;

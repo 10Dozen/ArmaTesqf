@@ -21,43 +21,57 @@ switch toUpper _method do {
 		private _suiteId = _suite get "id";
 
 		private _outputs = _suite get "option.output";
-		if ("rpt" in _outputs) then {
+		if (RUNNER__CHECK_OUTPUTS(TESQF_OUTPUT_RPT)) then {
 			[
 				"__REPORT_TEST_TO_RPT",
 				_testSuiteName,
 				_msgType,
 				_msgTestDetails,
 				_msgDetails
-			] spawn SELF;
+			] call SELF;
 		};
-		// Other outputs
-
-		// Report test result to Suite's diary topic
-		["__REPORT_TEST_TO_DIARY",
-			_testSuiteName,
-			_suiteId,
-			_msgType,
-			_msgTestDetails
-		] call SELF;
+		if (RUNNER__CHECK_OUTPUTS(TESQF_OUTPUP_SYSTEMCHAT)) then {
+			[
+				"__REPORT_TEST_TO_SYSTEMCHAT",
+				_testSuiteName,
+				_msgType,
+				_msgTestDetails,
+				_msgDetails
+			] call SELF;
+		};
+		if (RUNNER__CHECK_OUTPUTS(TESQF_OUTPUT_DIARY)) then {
+			["__REPORT_TEST_TO_DIARY",
+				_testSuiteName,
+				_suiteId,
+				_msgType,
+				_msgTestDetails
+			] call SELF;
+		};
 	};
 	case "REPORT_SUITE_STARTED": {
-		private _suiteName = _arg1;
-		private _testCount = _arg2;
-		private _tags = _arg3;
-		private _outputs = _arg4;
+		private _suite = _arg1;
 
-		// if ("rpt" in _outputs) exitWith {};
+		private _suiteName = _suite get "name";
+		private _testCount = _suite get "count";
+		private _tags = _suite get "tags";
+		private _outputs = _suite get "options.output";
 
-		private _msg = format ["========= TEST SUITE [%1] STARTED =========", _suiteName];
-		["__WRITE_TO_RPT", _msg] call SELF;
-
-		_msg = format [
+		private _msg1 = format ["========= TEST SUITE [%1] STARTED =========", _suiteName];
+		private _msg2 = format [
 			"========= Tests: %2. Tags: %3 =========",
 			_suiteName,
 			_testCount,
 			_tags
 		];
-		["__WRITE_TO_RPT", _msg] call SELF;
+
+		if (TESQF_OUTPUT_RPT in _outputs) then {
+			["__WRITE_TO_RPT",_msg1] call SELF;
+			["__WRITE_TO_RPT",_msg2] call SELF;
+		};
+
+		if !(TESQF_OUTPUP_SYSTEMCHAT in _outputs) exitWith {};
+		systemChat format ["[%1] %2",QTCOMPONENT,_msg1];
+		systemChat format ["[%1] %2",QTCOMPONENT,_msg2];
 	};
 	case "REPORT_SUITE_RESULTS": {
 		// Final message (on top):
@@ -74,22 +88,13 @@ switch toUpper _method do {
 		*/
 		private _suite = _arg1;
 
+		private _outputs = _suite get "options.output";
+
 		private _suiteName = _suite get "name";
 		private _suiteId = _suite get "id";
-		private _testsTotal = count (_suite get "results");
+		private _testsTotal = _suite get "count";
 		private _testsResults = _suite get "results_counter";
 		private _suiteResult = _suite get "suite_result";
-
-		// Report to Diary
-		private _topicName = format ["%1 (%2)", _suiteName, _suiteId];
-
-		private _topicResults = ["__FORMAT_RESULTS_FOR_DIARY",
-			[_suiteName, _suiteResult, _testsTotal, _testsResults]
-		] call SELF;
-		private _buttons = ["__FORMAT_RESULTS_BUTTONS",_suiteId] call SELF;
-
-		player createDiaryRecord [TESQF_SUBJECT,[_topicName,_topicResults]];
-		player createDiaryRecord [TESQF_SUBJECT,[_topicName,_buttons]];
 
 		// Report to Hint
 		private _hint = ["__FORMAT_RESULTS_FOR_HINT",
@@ -97,13 +102,35 @@ switch toUpper _method do {
 		] call SELF;
 		hint parseText _hint;
 
+		// Report to Diary
+		if (TESQF_OUTPUT_DIARY in _outputs) then {
+			["__REPORT_SUITE_TO_DIARY",[
+				_suiteName,
+				_suiteId,
+				_suiteResult,
+				_testsTotal,
+				_testsResults
+			]] call SELF;
+		};
+
+		// Report to SystemChat
+		if (TESQF_OUTPUP_SYSTEMCHAT in _outputs) then {
+			["__REPORT_SUITE_TO_SYSTEMCHAT",[
+				_suiteName,
+				_suiteResult,
+				_testsTotal,
+				_testsResults
+			]] call SELF;
+		};
+
 		// Report to RPT
-		["__WRITE_TO_RPT", format ["========= TEST SUITE [%1] FINISHED =========",
-			_suiteName
+		if !(TESQF_OUTPUT_RPT in _outputs) exitWith {};
+		["__REPORT_SUITE_TO_RPT",[
+			_suiteName,
+			_suiteResult,
+			_testsTotal,
+			_testsResults
 		]] call SELF;
-		["__WRITE_TO_RPT", text (["__FORMAT_RESULTS_FOR_RPT",
-			[_suiteName, _suiteResult,_testsTotal, _testsResults]
-		] call SELF) ] call SELF;
 	};
 	case "EXPORT_RESULTS": {
 		private _id = _arg1;
@@ -139,7 +166,7 @@ switch toUpper _method do {
 
 		player createDiaryRecord  [TESQF_SUBJECT, [
 			TESQF_RUNNER_TOPIC,
-			"Note: Use TestSuite's buttons to run specific test suite."
+			"Note: Use buttons to run specific Test Suite."
 		]];
 	};
 	case "ADD_SUITE_TO_RUNNER_CONTROLS": {
@@ -185,6 +212,22 @@ switch toUpper _method do {
 
 		["__WRITE_TO_RPT",_msg] call SELF;
 	};
+	case "__REPORT_TEST_TO_SYSTEMCHAT": {
+		private _msgSuiteName = _arg1;
+		private _msgType = _arg2;
+		private _msgTestDetails = _arg3;
+		private _msgDetails = _arg4;
+
+		private _msg = [
+			"__FORMAT_TEST_FOR_RPT",
+			_msgSuiteName,
+			_msgType,
+			_msgTestDetails,
+			_msgDetails
+		] call SELF;
+
+		systemChat _msg;
+	};
 	case "__REPORT_TEST_TO_DIARY": {
 		// [Passed] My Test (id:0)
 		private _suiteName = _arg1;
@@ -203,6 +246,61 @@ switch toUpper _method do {
 		] call SELF;
 
 		player createDiaryRecord [TESQF_SUBJECT, [_topicName,_line]];
+	};
+	case "__REPORT_SUITE_TO_RPT": {
+		_arg1 params [
+			"_suiteName",
+			"_suiteResult",
+			"_testsTotalCount",
+			"_testsResults"
+		];
+
+		["__WRITE_TO_RPT", format ["========= TEST SUITE [%1] FINISHED =========",
+			_suiteName
+		]] call SELF;
+		["__WRITE_TO_RPT", text (["__FORMAT_RESULTS_FOR_RPT",
+			[_suiteName, _suiteResult,_testsTotalCount,_testsResults]
+		] call SELF) ] call SELF;
+	};
+	case "__REPORT_SUITE_TO_SYSTEMCHAT": {
+		_arg1 params [
+			"_suiteName",
+			"_suiteResult",
+			"_testsTotalCount",
+			"_testsResults"
+		];
+
+		systemChat format ["========= TEST SUITE [%1] FINISHED =========",_suiteName];
+		systemChat format [["__FORMAT_RESULTS_FOR_RPT",
+			[_suiteName, _suiteResult,_testsTotalCount,_testsResults]
+		] call SELF];
+	};
+	case "__REPORT_SUITE_TO_DIARY": {
+		_arg1 params [
+			"_suiteName",
+			"_suiteId",
+			"_suiteResult",
+			"_testsTotalCount",
+			"_testsResults"
+		];
+
+		private _topicName = format ["%1 (%2)",_suiteName,_suiteId];
+		player createDiaryRecord [
+			TESQF_SUBJECT,
+			[
+				_topicName,
+				["__FORMAT_RESULTS_FOR_DIARY",
+					[_suiteName,_suiteResult,_testsTotalCount,_testsResults]
+				] call SELF
+			]
+		];
+		player createDiaryRecord [
+			TESQF_SUBJECT,
+			[
+				_topicName,
+				["__FORMAT_RESULTS_BUTTONS",_suiteId] call SELF
+			]
+		];
 	};
 
 	#define _GET_TEST_RESULTS(X,TYPE) X get TYPE, X get format ["%1.percent",TYPE]
@@ -298,7 +396,7 @@ switch toUpper _method do {
 		private _suiteName = _suite get "name";
 		private _suiteResult = _suite get "suite_result";
 		private _testResults = _suite get "results_counter";
-		private _totalTests = count (_suite get "results");
+		private _totalTests = _suite get "count";
 
 		private _outputText = [
 			_suiteName,
@@ -406,7 +504,7 @@ switch toUpper _method do {
 
 	case "__WRITE_TO_RPT": {
 		private _msg = _arg1;
-		diag_log parseText format ["[%1] %2", QCOMPONENT, _msg];
+		diag_log parseText format ["[%1] %2", QTCOMPONENT, _msg];
 	};
 };
 

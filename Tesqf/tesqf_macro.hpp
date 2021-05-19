@@ -9,15 +9,23 @@
 #define EVENT_SUITE_STARTED QTGVAR(TestSuiteStarted)
 #define EVENT_SUITE_FINISHED QTGVAR(TestSuiteFinished)
 
+#define EVENT_RUNNER_STOPPED QTGVAR(RunnerStopped)
+
 #define STATE_PASS "Passed"
 #define STATE_SKIP "Skipped"
 #define STATE_CRASH "Crashed"
 #define STATE_FAIL "Failed"
 #define STATE_NOT_RUN "Not run"
 
-#define TESQF_SUBJECT "Tesqfy"
+#define STATE_RUNNER_READY "READY"
+#define STATE_RUNNER_BUSY "BUSY"
+
+#define TESQF_SUBJECT "Tesqf"
 #define TESQF_RUNNER_TOPIC "Tesqf Runner"
 
+#define TESQF_OUTPUT_RPT "rpt"
+#define TESQF_OUTPUP_SYSTEMCHAT "systemchat"
+#define TESQF_OUTPUT_DIARY "diary"
 
 // --- Common ---
 #ifndef QUOTE
@@ -28,16 +36,15 @@
 #define TRPL(X,Y,Z) DBL(DBL(X,Y),Z)
 #define QUAD(X,Y,Z,K) DBL(TRPL(X,Y,Z),K)
 
-#define COMPONENT Tesqf
-#define QCOMPONENT QUOTE(COMPONENT)
-#define TGVAR(X) TRPL(COMPONENT,_,X)
+#define TCOMPONENT Tesqf
+#define QTCOMPONENT QUOTE(TCOMPONENT)
+#define TGVAR(X) TRPL(TCOMPONENT,_,X)
 #define QTGVAR(X) QUOTE(TGVAR(X))
-#define TLVAR(X) QUAD(_,COMPONENT,_,X)
+#define TLVAR(X) QUAD(_,TCOMPONENT,_,X)
 #define QTLVAR(X) QUOTE(TLVAR(X))
 #define TFUNC(X) TGVAR(DBL(fnc_,X))
 
 #define TESQF_COMPILE_FUNCTION(NAME) TGVAR(NAME) = compile preprocessFileLineNumbers QUOTE(QUAD(PATH_TO_TESQF,\,NAME,.sqf))
-
 
 // --- Runner object ---
 #define RUNNER__SELF TGVAR(Runner)
@@ -46,35 +53,35 @@
 #define RUNNER__SUITE RUNNER__GET_SUITE_BY_ID(RUNNER__SELF get "running_suite_id")
 #define RUNNER__SUITE_GET_CURRENT_ID (RUNNER__SELF get "running_suite_id")
 
-
+#define RUNNER__CHECK_OUTPUTS(OUTPUT) OUTPUT in (RUNNER__SELF get "reporter.output")
 
 // --- Test execution ---
 #define _TEST_NAME TLVAR(TestName)
 
-#define FAIL_TEST(__FILE__,MSG,CONDITION) [EVENT_TEST_FAILED,[_TEST_NAME,format ["%1:%2",__FILE__,__LINE__],MSG,CONDITION]] call CBA_fnc_localEvent
+#define FAIL_TEST(MSG,CONDITION) [EVENT_TEST_FAILED,[_TEST_NAME,format ["%1:%2",__FILE__,__LINE__],MSG,CONDITION]] call CBA_fnc_localEvent
 
-#define _IN_TEST_FORMAT_CONDITION(CONDITION) format ["Condition [%1] is %2", QUOTE(CONDITION), CONDITION]
+#define _IN_TEST_FORMAT_CONDITION(TYPE,CONDITION) format ["%1 Condition [%2] is %3",TYPE,QUOTE(CONDITION),CONDITION]
 #define _IN_TEST_FORMAT_EQUALS_CONDITION(VAR1,VAR2) format ["%1 is equals %2", VAR1, VAR2]
 #define _IN_TEST_FORMAT_NOT_EQUALS_CONDITION(VAR1,VAR2) format ["%1 is not equals %2", VAR1, VAR2]
 
 #define ASSERT_TRUE(MSG,CONDITION) \
 	if !(CONDITION) exitWith { \
-		FAIL_TEST(__FILE__,MSG,_IN_TEST_FORMAT_CONDITION(CONDITION)); \
+		FAIL_TEST(MSG,_IN_TEST_FORMAT_CONDITION("Assert True",CONDITION)); \
 	}
 
 #define ASSERT_FALSE(MSG,CONDITION) \
 	if (CONDITION) exitWith { \
-		FAIL_TEST(__FILE__,MSG,_IN_TEST_FORMAT_CONDITION(CONDITION)); \
+		FAIL_TEST(MSG,_IN_TEST_FORMAT_CONDITION("Assert False",CONDITION)); \
 	}
 
 #define ASSERT_EQUALS(MSG,VAR1,VAR2) \
 	if !(VAR1 isEqualType VAR2 && {VAR1 isEqualTo VAR2}) exitWith { \
-		FAIL_TEST(__FILE__,MSG,_IN_TEST_FORMAT_NOT_EQUALS_CONDITION(VAR1,VAR2)); \
+		FAIL_TEST(MSG,_IN_TEST_FORMAT_NOT_EQUALS_CONDITION(VAR1,VAR2)); \
 	}
 
 #define ASSERT_NOT_EQUALS(MSG,VAR1,VAR2) \
 	if (VAR1 isEqualType VAR2 && {VAR1 isEqualTo VAR2}) exitWith { \
-		FAIL_TEST(__FILE__,MSG,_IN_TEST_FORMAT_EQUALS_CONDITION(VAR1,VAR2)); \
+		FAIL_TEST(MSG,_IN_TEST_FORMAT_EQUALS_CONDITION(VAR1,VAR2)); \
 	}
 
 

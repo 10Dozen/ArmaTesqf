@@ -82,36 +82,37 @@ switch toUpper _method do {
 		private _suite = _arg1;
 		private _options = _arg2;
 		private _defaults = [
-			["output", ["rpt","diary","systemChat"]],
+			["output", [TESQF_OUTPUT_RPT,TESQF_OUTPUT_DIARY,TESQF_OUTPUP_SYSTEMCHAT]],
 			["instant_fail", false]
 		];
 
 		{
 			_x params ["_option", "_default"];
-			_suite set [format ["option.%1", _option], _default];
+			_suite set [format ["options.%1", _option], _default];
 		} forEach _defaults;
 
 		{
 			_x params ["_option", "_value"];
+			_option = toLower _option;
 
 			switch _option do {
 				case "output": {
 					if (isNil "_value") exitWith {
 						_value = []
 					};
-					_value = _value splitString ","
+					_value = (_value splitString ",") apply { toLower _x };
 				};
 				case "instant_fail": {
 					if (isNil "_value") exitWith {
 						_value = false;
 					};
-					_value = call compile _value
+					_value = call compile _value;
 				 };
-				default { nil }
+				default { nil };
 			};
 
 			if (!isNil "_value") then {
-				_suite set [format ["option.%1", _option], _value];
+				_suite set [format ["options.%1", _option], _value];
 			};
 		} forEach _options;
 	};
