@@ -173,11 +173,12 @@ _EOL
 where:
 <br>**a)** `<LOG_MACRO>` is one of the:
 | Macro | Min. log level |
-|---|---|----|
+|---|---|
 | ERR_<br>ERROR_ | TLOG_LEVEL_ERROR |
 | WARN_ | TLOG_LEVEL_WARN |
 | INFO_<br>LOG_ | TLOG_LEVEL_INFO |
 | DEBUG_<br>DBG_ | TLOG_LEVEL_DEBUG |
+
 <br>**b)** Message and formatting parametes; e.g. _"Message %1 %2",100,[1,2,3]_ will result in message _"Message 100 [1,2,3]"_
 <br>**c)** `_EOL` macro marks end of log line
 
